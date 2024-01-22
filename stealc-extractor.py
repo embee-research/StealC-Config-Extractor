@@ -12,46 +12,72 @@ Samples:
 """
 
 
-import base64,sys,re,string
+import base64
+import os
+import re
 from Crypto.Cipher import ARC4
 
-filename = sys.argv[1]
-#open file
-f = open(filename,"rb")
-content = f.read()
-f.close()
+from maco.extractor import Extractor
+from maco.model import ExtractorModel, ConnUsageEnum
+from sys import argv
+from typing import BinaryIO, List, Optional
 
 
-#Search for hex-like rc4 key
-key_pattern = re.compile(b"[a-f0-9]{15,30}")
-key_results = key_pattern.findall(content)
+class Stealc(Extractor):
+    family = "Stealc"
+    author = "@embee_research"
+    last_modified = "2024-01-21"
+    sharing: str = "TLP:CLEAR"
+    yara_rule: str = open(os.path.join(os.path.dirname(__file__), 'win_stealc_bytecodes_oct_2023.yar'), 'r').read()
 
-#Search for rc4 + base64 encoded data
-config_patterns = re.compile(b"[a-zA-Z0-9\=\+\/]{10,}")
-config_results = config_patterns.findall(content)
+    def run(self, stream: BinaryIO, matches: List = []) -> Optional[ExtractorModel]:
+        content = stream.read()
+        cfg = ExtractorModel(family=self.family)
+
+        # Search for hex-like rc4 key
+        key_pattern = re.compile(b"[a-f0-9]{15,30}")
+        key_results = key_pattern.findall(content)
+
+        # Search for rc4 + base64 encoded data
+        config_patterns = re.compile(b"[a-zA-Z0-9\=\+\/]{10,}")
+        config_results = config_patterns.findall(content)
 
 
-key = key_results[0]
-final = []
+        key = key_results[0]
+        final = []
 
-#go through base64 list and attempt to rc4 decrypt
-cipher = ARC4.new(key)
-for result in config_results:
-    try:
+        # go through base64 list and attempt to rc4 decrypt
         cipher = ARC4.new(key)
-        result = base64.b64decode(result.decode('utf-8'))
-        msg = cipher.decrypt(result)
-        out = msg
-        final.append(out)
+        for result in config_results:
+            try:
+                cipher = ARC4.new(key)
+                result = base64.b64decode(result.decode('utf-8'))
+                msg = cipher.decrypt(result)
+                out = msg
+                final.append(out)
+
+            except Exception as e:
+                # self.logger.error(e)
+                pass
+
+        # look for patterns that indicate a c2 or url
+        for i in final:
+            if b":/" in i or len(str(i).split(".")) > 3:
+                c2_url = i.decode('utf-8')
+                self.logger.info(c2_url)
+                cfg.http.append(cfg.Http(uri=c2_url, usage=ConnUsageEnum.c2))
+
+        return cfg
 
 
-    except Exception as e:
-        #print(e)
-        pass
+if __name__ == "__main__":
+    import yara
+    parser = Stealc()
+    file_path = argv[1]
 
-#look for patterns that indicate a c2 or url
-for i in final:
-    if b":/" in i or len(str(i).split(".")) > 3:
-        print(filename, end=": ")
-        print(i.decode('utf-8'))
-
+    with open(file_path, "rb") as f:
+        result = parser.run(f, matches=yara.compile(source=parser.yara_rule).match(file_path))
+        if result:
+            print(result.model_dump_json(indent=2, exclude_none=True, exclude_defaults=True))
+        else:
+            print("No configuration extracted")
