@@ -1,13 +1,25 @@
 # StealC-Config-Extractor
-Configuration Extractor and Yara Rule For StealC
+Configuration Extractor and Yara Rule For StealC (written for the [MaCo](https://github.com/CybercentreCanada/Maco) framework)
 
 # Usage
 `Stealc-extractor.py <filename>`
 
 # Example Output
 
-![image](https://github.com/embee-research/StealC-Config-Extractor/assets/82847168/66b2b032-d2de-4e1e-bfc0-cb27ce49d317)
+```bash
+$ python stealc-extractor.py <filename>
+{
+  "family": "Stealc",
+  "http": [
+    {
+      "uri": "<c2_uri>",
+      "usage": "c2"
+    },
+    ...
+  ]
+}
 
+```
 
 # hashes
 
@@ -89,4 +101,3 @@ c0541c65480fc76bcb5d3051a09fc37ac3b142cffb9610bc18dc126019244578
 421121f293bf1b811c874b88b73d8a3a079108ba8ae0a9e2a7b171eca9bf3107
 fca68d95a6ac7335900e37e651c90069b92023b7b6e157d9a159dc2796fc2915
 ```
-
